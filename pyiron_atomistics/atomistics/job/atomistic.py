@@ -4,6 +4,7 @@
 
 from ase.io import write as ase_write
 import copy
+from functools import wraps
 
 import numpy as np
 import warnings
@@ -771,26 +772,38 @@ structure=atoms # atoms, continue_final
 """
         self.load_string(file_content)
 
+def property_or_none(prop):
+    @wraps(prop)
+    def wrapped(obj):
+        try:
+            return prop(obj)
+        except ValueError:
+            return None
+    return wrapped
 
 class GenericOutput(object):
     def __init__(self, job):
         self._job = job
 
     @property
+    @property_or_none
     def cells(self):
-        return self._job["output/generic/cells"]
+        return self._job.project_hdf5["output/generic/cells"]
 
     @property
+    @property_or_none
     def energy_pot(self):
-        return self._job["output/generic/energy_pot"]
+        return self._job.project_hdf5["output/generic/energy_pot"]
 
     @property
+    @property_or_none
     def energy_tot(self):
-        return self._job["output/generic/energy_tot"]
+        return self._job.project_hdf5["output/generic/energy_tot"]
 
     @property
+    @property_or_none
     def forces(self):
-        return self._job["output/generic/forces"]
+        return self._job.project_hdf5["output/generic/forces"]
 
     @property
     def force_max(self):
@@ -801,40 +814,48 @@ class GenericOutput(object):
         return np.linalg.norm(self.forces, axis=-1).max(axis=-1)
 
     @property
+    @property_or_none
     def positions(self):
-        return self._job["output/generic/positions"]
+        return self._job.project_hdf5["output/generic/positions"]
 
     @property
+    @property_or_none
     def pressures(self):
-        return self._job["output/generic/pressures"]
+        return self._job.project_hdf5["output/generic/pressures"]
 
     @property
+    @property_or_none
     def steps(self):
-        return self._job["output/generic/steps"]
+        return self._job.project_hdf5["output/generic/steps"]
 
     @property
+    @property_or_none
     def temperature(self):
-        return self._job["output/generic/temperature"]
+        return self._job.project_hdf5["output/generic/temperature"]
 
     @property
+    @property_or_none
     def computation_time(self):
-        return self._job["output/generic/computation_time"]
+        return self._job.project_hdf5["output/generic/computation_time"]
 
     @property
+    @property_or_none
     def unwrapped_positions(self):
-        unwrapped_positions = self._job["output/generic/unwrapped_positions"]
+        unwrapped_positions = self._job.project_hdf5["output/generic/unwrapped_positions"]
         if unwrapped_positions is not None:
             return unwrapped_positions
         else:
             return self._job.structure.positions+self.total_displacements
 
     @property
+    @property_or_none
     def volume(self):
-        return self._job["output/generic/volume"]
+        return self._job.project_hdf5["output/generic/volume"]
 
     @property
+    @property_or_none
     def indices(self):
-        return self._job["output/generic/indices"]
+        return self._job.project_hdf5["output/generic/indices"]
 
     @property
     def displacements(self):

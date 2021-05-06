@@ -423,7 +423,10 @@ class GenericInteractiveOutput(GenericOutput):
         Returns:
 
         """
-        fetched = self._job["output/interactive/" + key]
+        try:
+            fetched = self._job.project_hdf5["output/interactive/" + key]
+        except ValueError:
+            fetched = None
         if fetched is None or len(fetched) == 0:
             fetched = getattr(super(), key)
         return fetched
@@ -445,12 +448,13 @@ class GenericInteractiveOutput(GenericOutput):
         return_lst = self._key_from_cache(key)
         hdf5_output = self._key_from_hdf(key)
         if hdf5_output is not None:
-            return_lst = hdf5_output.tolist() + return_lst
+            return np.concatenate([hdf5_output, *return_lst])
         else:
             prop_result = prop(self)
             if prop_result is not None:
-                return_lst = prop(self).tolist() + return_lst
-        return np.array(return_lst)
+                return np.concatenate([prop_result, *return_lst])
+            else:
+                return np.asarray(return_lst)
 
     def _lst_from_property(self, key):
         """
