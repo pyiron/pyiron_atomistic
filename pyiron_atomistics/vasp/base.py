@@ -2571,8 +2571,7 @@ def generic_output_dict_to_hdf(data_dict, hdf, group_name="generic"):
             if "bands" in data_dict["dft"].keys():
                 electronic_structure_dict_to_hdf(
                     data_dict=data_dict["dft"]["bands"],
-                    hdf=hdf_dft,
-                    group_name="bands",
+                    hdf=hdf_dft.create_group("bands")
                 )
 
 
@@ -2606,22 +2605,19 @@ def output_dict_to_hdf(data_dict, hdf, group_name="output"):
         if "electrostatic_potential" in data_dict.keys():
             volumetric_data_dict_to_hdf(
                 data_dict=data_dict["electrostatic_potential"],
-                hdf=hdf5_output,
-                group_name="electrostatic_potential",
+                hdf=hdf5_output.create_group("electrostatic_potential")
             )
 
         if "charge_density" in data_dict.keys():
             volumetric_data_dict_to_hdf(
                 data_dict=data_dict["charge_density"],
-                hdf=hdf5_output,
-                group_name="charge_density",
+                hdf=hdf5_output.create_group("charge_density")
             )
 
         if "electronic_structure" in data_dict.keys():
             electronic_structure_dict_to_hdf(
                 data_dict=data_dict["electronic_structure"],
-                hdf=hdf5_output,
-                group_name="electronic_structure",
+                hdf=hdf5_output.create_group("electronic_structure")
             )
 
         dict_group_to_hdf(data_dict=data_dict, hdf=hdf5_output, group="outcar")

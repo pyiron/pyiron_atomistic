@@ -6,7 +6,7 @@ import math
 
 import numpy as np
 import os
-from pyiron_base import state
+from pyiron_base import state, HasHDF
 from pyiron_atomistics.vasp.structure import (
     atoms_from_string,
     get_species_list_from_potcar,
@@ -25,7 +25,7 @@ __status__ = "production"
 __date__ = "Sep 1, 2017"
 
 
-class VaspVolumetricData(VolumetricData):
+class VaspVolumetricData(VolumetricData, HasHDF):
     """
     General class for parsing and manipulating volumetric static within VASP. The basic idea of the Base class is
     adapted from the pymatgen vasp VolumtricData class
@@ -286,40 +286,39 @@ class VaspVolumetricData(VolumetricData):
             volumetric_data_dict["diff"] = self.diff_data
         return volumetric_data_dict
 
-    def to_hdf(self, hdf, group_name="volumetric_data"):
+    def _get_hdf_group_name(self):
+        return "volumetric_data"
+
+    def _to_hdf(self, hdf):
         """
         Writes the data as a group to a HDF5 file
 
         Args:
             hdf (pyiron_base.generic.hdfio.ProjectHDFio): The HDF file/path to write the data to
-            group_name (str): The name of the group under which the data must be stored as
 
         """
         volumetric_data_dict_to_hdf(
             data_dict=self.to_dict(),
             hdf=hdf,
-            group_name=group_name,
         )
 
-    def from_hdf(self, hdf, group_name="volumetric_data"):
+    def _from_hdf(self, hdf, version=None):
         """
         Recreating the VolumetricData instance by reading data from the HDF5 files
 
         Args:
             hdf (pyiron_base.generic.hdfio.ProjectHDFio): The HDF file/path to write the data to
-            group_name (str): The name of the group under which the data must be stored as
+            version (str): version of the class that was written to the HDF5 file
 
         Returns:
             pyiron.atomistics.volumetric.generic.VolumetricData: The VolumetricData instance
 
         """
-        with hdf.open(group_name) as hdf_vd:
-            self._total_data = hdf_vd["total"]
-            if "diff" in hdf_vd.list_nodes():
-                self._diff_data = hdf_vd["diff"]
+        self._total_data = hdf["total"]
+        if "diff" in hdf.list_nodes():
+            self._diff_data = hdf["diff"]
 
 
-def volumetric_data_dict_to_hdf(data_dict, hdf, group_name="volumetric_data"):
-    with hdf.open(group_name) as hdf_vd:
-        for k, v in data_dict.items():
-            hdf_vd[k] = v
+def volumetric_data_dict_to_hdf(data_dict, hdf):
+    for k, v in data_dict.items():
+        hdf[k] = v

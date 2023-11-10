@@ -8,6 +8,8 @@ import warnings
 import scipy.constants
 import re
 
+from pyiron_base import HasHDF
+
 __author__ = "Sudarsan Surendralal"
 __copyright__ = (
     "Copyright 2021, Max-Planck-Institut für Eisenforschung GmbH - "
@@ -24,7 +26,7 @@ KBAR_TO_EVA = (
 )
 
 
-class Outcar(object):
+class Outcar(HasHDF):
     """
     This module is used to parse VASP OUTCAR files.
 
@@ -132,17 +134,18 @@ class Outcar(object):
         except IndexError:
             self.parse_dict["pressures"] = np.zeros(len(steps))
 
-    def to_hdf(self, hdf, group_name="outcar"):
+    def _get_hdf_group_name(self):
+        return "outcar"
+
+    def _to_hdf(self, hdf):
         """
         Store output in an HDF5 file
 
         Args:
             hdf (pyiron_base.generic.hdfio.FileHDFio): HDF5 group or file
-            group_name (str): Name of the HDF5 group
         """
-        with hdf.open(group_name) as hdf5_output:
-            for key in self.parse_dict.keys():
-                hdf5_output[key] = self.parse_dict[key]
+        for key in self.parse_dict:
+            hdf[key] = self.parse_dict[key]
 
     def to_hdf_minimal(self, hdf, group_name="outcar"):
         """
@@ -173,17 +176,16 @@ class Outcar(object):
                 hdf5_output[key] = self.parse_dict[key]
         return hdf5_output
 
-    def from_hdf(self, hdf, group_name="outcar"):
+    def _from_hdf(self, hdf, version=None):
         """
         Load output from an HDF5 file
 
         Args:
             hdf (pyiron_base.generic.hdfio.FileHDFio): HDF5 group or file
-            group_name (str): Name of the HDF5 group
+            version (str): version of the class that was written to the HDF5 file
         """
-        with hdf.open(group_name) as hdf5_output:
-            for key in hdf5_output.list_nodes():
-                self.parse_dict[key] = hdf5_output[key]
+        for key in hdf.list_nodes():
+            self.parse_dict[key] = hdf[key]
 
     def get_vasp_version(self, filename="OUTCAR", lines=None):
         return lines[0].lstrip().split(sep=" ")[0]
