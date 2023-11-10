@@ -2286,6 +2286,7 @@ class _SphinxLogParser:
         arr = np.loadtxt(re.findall(term, self.log_main, re.MULTILINE))
         shape = (-1, len(self.k_points), arr.shape[-1])
         if self.spin_enabled:
+            arr = np.vstack((arr[::2], arr[1::2]))
             shape = (-1, 2, len(self.k_points), shape[-1])
         return arr.reshape(shape)
 

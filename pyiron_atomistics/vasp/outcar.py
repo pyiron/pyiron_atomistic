@@ -75,6 +75,7 @@ class Outcar(object):
         elapsed_time = self.get_elapsed_time(filename=filename, lines=lines)
         memory_used = self.get_memory_used(filename=filename, lines=lines)
         vasp_version = self.get_vasp_version(filename=filename, lines=lines)
+        full_array, ml_index, dft_index = self.get_index_type(filename=filename, lines=lines)  # ml and dft indices from all outcar indices
 
         try:
             (
@@ -92,14 +93,36 @@ class Outcar(object):
         )
         broyden_mixing = self.get_broyden_mixing_mesh(filename=filename, lines=lines)
         self.parse_dict["vasp_version"] = vasp_version
+        
+        self.parse_dict["ml_index"] = ml_index
+        self.parse_dict["dft_index"] = dft_index
+        outcar_index = [steps[i] for i in np.union1d(dft_index, ml_index)]
+        is_ml_vec = full_array[outcar_index]
+        self.parse_dict["steps"] = np.arange(len(is_ml_vec))
+
+        self.parse_dict["ml_steps"] = self.parse_dict["steps"][is_ml_vec]
+        self.parse_dict["dft_steps"] = self.parse_dict["steps"][~is_ml_vec]
+        
+        ## quantities from both DFT and ML
+        self.parse_dict["energies"] = [energies[i] for i in np.union1d(dft_index, ml_index)] #remove zeroes
+
+        
+        ## quantites from DFT
+        self.parse_dict["dft_energies"] = [energies[i] for i in dft_index]
+        self.parse_dict["energies_int"] = [energies_int[i] for i in dft_index]
+        self.parse_dict["energies_zero"] = [energies_zero[i] for i in dft_index] 
+        self.parse_dict["scf_energies"] = [scf_energies[i] for i in dft_index]
+        
+        ## quantites from ML
+        self.parse_dict["ml_energies"] = [energies[i] for i in ml_index]
         self.parse_dict["energies"] = energies
-        self.parse_dict["energies_int"] = energies_int
-        self.parse_dict["energies_zero"] = energies_zero
-        self.parse_dict["scf_energies"] = scf_energies
+
+        
         self.parse_dict["forces"] = forces
         self.parse_dict["positions"] = positions
         self.parse_dict["cells"] = cells
-        self.parse_dict["steps"] = steps
+        
+        #self.parse_dict["steps"] = steps
         self.parse_dict["temperatures"] = temperatures
         self.parse_dict["time"] = time
         self.parse_dict["fermi_level"] = fermi_level
@@ -438,7 +461,7 @@ class Outcar(object):
         """
 
         def get_energy_without_entropy_from_line(line):
-            return float(_clean_line(line.strip()).split()[3])
+            return float(_clean_line(line.strip()).split("=")[1].split()[0])
 
         trigger_indices, lines = _get_trigger(
             lines=lines,
@@ -451,6 +474,35 @@ class Outcar(object):
                 for j in trigger_indices
             ]
         )
+    
+    
+    @staticmethod   # -> new function 
+    def get_index_type(filename="OUTCAR", lines=None):          
+        '''
+        - In the outcar file you have two output for each DFT step (one of which is always zero for the energy and labelled ML) and one output for each ML step
+        - This function read all steps from the outcar file and then returns back what is the index of the DFT steps and the index of each ML step  
+        - return indices of each DFT steps and index of DFT steps (excluding the empty ML output before DFT) from all steps
+        '''      
+        trigger_indices, lines = _get_trigger(
+            lines=lines,
+            filename=filename,
+            trigger="FREE ENERGIE OF THE ION-ELECTRON SYSTEM (eV)",
+        )
+        full_array = np.array(                       ##boolean array, length: ml_steps + 2 x dft steps, values: true if ml false if dft and additional true for dummy ml steps printed withing dft steps
+            [
+                "ML" in lines[j]
+                for j in trigger_indices
+            ]
+        )
+        outcar_ml_index = np.setdiff1d(np.where(full_array)[0], np.where(~full_array)[0]-1)     ## ml indices of of the full_array dummy ml in dft is removed
+        outcar_dft_index = np.where(~full_array)[0]                                             ## dft indiceds of the full_array
+        
+        #outcar_index = [steps[i] for i in np.union1d(dft_index, ml_index)]
+        return full_array, outcar_ml_index, outcar_dft_index  #ml indices, dft indices
+    
+        # full_array, ml_index, dft_index = self.get_index_type(filename=filename, lines=lines)  # ml and dft indices from all outcar indices
+        # outcar_index = [steps[i] for i in np.union1d(dft_index, ml_index)]
+        # is_ml_vec = full_array[outcar_index]
 
     @staticmethod
     def get_energy_sigma_0(filename="OUTCAR", lines=None):
@@ -667,7 +719,7 @@ class Outcar(object):
         Returns:
             numpy.ndarray: Steps during the simulation
         """
-        nblock_regex = re.compile(r"NBLOCK =\s+(\d+);")
+        nblock_regex = re.compile(r"NBLOCK =\s+(\d+)")
         trigger = "FREE ENERGIE OF THE ION-ELECTRON SYSTEM (eV)"
         steps = 0
         nblock = None
