@@ -57,6 +57,7 @@ class Vasprun(object):
         """
         if not (os.path.isfile(filename)):
             raise AssertionError()
+        self.filename = filename
         try:
             self.parse_root_to_dict(filename)
         except ParseError:
@@ -83,9 +84,7 @@ class Vasprun(object):
         d["stress_tensors"] = list()
         for _, leaf in ETree.iterparse(filename):
             if leaf.tag in ["generator", "incar"]:
-                d[leaf.tag] = dict()
-                for items in leaf:
-                    d[leaf.tag] = self.parse_item_to_dict(items, d[leaf.tag])
+                d[leaf.tag] = self._parse_INCAR_and_generator(leaf)
             if leaf.tag in ["kpoints"]:
                 d[leaf.tag] = dict()
                 self.parse_kpoints_to_dict(leaf, d[leaf.tag])
@@ -539,17 +538,112 @@ class Vasprun(object):
             if leaf.tag == "varray" and leaf.attrib["name"] == "selective":
                 d["selective_dynamics"] = self._parse_2d_matrix(leaf, vec_type=bool)
 
+    def _parse_INCAR_generator_parameters(self, val_type, val):
+        """
+        Helper function to convert a Vasprun parameter into the proper type.
+        Boolean, int and float types are converted.
+
+        Args:
+            val_type: Value type parsed from vasprun.xml.
+            val: Actual string value parsed for vasprun.xml.
+        """
+        if val_type == "logical":
+            return val == "T"
+        if val_type == "int":
+            return int(val)
+        if val_type == "string":
+            return val.strip()
+        return float(val)
+
+    def _parse_INCAR_generator_vector_parameters(
+        self, val_type, val, filename, param_name
+    ):
+        """
+        Helper function to convert a Vasprun array-type parameter into the proper
+        type. Boolean, int and float types are converted.
+
+        Args:
+            val_type: Value type parsed from vasprun.xml.
+            val: Actual string value parsed for vasprun.xml.
+            filename: Fullpath of vasprun.xml. Used for robust error handling.
+                E.g., if vasprun.xml contains *** for some Incar parameters,
+                the code will try to read from an INCAR file present in the same
+                directory.
+            param_name: Name of parameter.
+
+        Returns:
+            Parsed value.
+        """
+        err = ValueError("Error in parsing vasprun.xml")
+        if val_type == "logical":
+            val = [i == "T" for i in val.split()]
+        elif val_type == "int":
+            try:
+                val = [int(i) for i in val.split()]
+            except ValueError:
+                # Fix for stupid error in vasprun sometimes which displays
+                # LDAUL/J as 2****
+                val = self._parse_from_incar(filename, param_name)
+                if val is None:
+                    raise err
+        elif val_type == "string":
+            val = val.split()
+        else:
+            try:
+                val = [float(i) for i in val.split()]
+            except ValueError:
+                # Fix for stupid error in vasprun sometimes which displays
+                # MAGMOM as 2****
+                # val = self._parse_from_incar(filename, param_name)
+                va
+                if val is None:
+                    raise err
+        return val
+
+    def _parse_INCAR_and_generator(self, elem):
+        params = {}
+        for c in elem:
+            name = c.attrib.get("name")
+            if c.tag not in ("i", "v"):
+                p = self._parse_INCAR_and_generator(c)
+                if name == "response functions":
+                    # Delete duplicate fields from "response functions",
+                    # which overrides the values in the root params.
+                    p = {k: v for k, v in p.items() if k not in params}
+                params.update(p)
+            else:
+                ptype = c.attrib.get("type")
+                val = c.text.strip() if c.text else ""
+                try:
+                    if c.tag == "i":
+                        params[name] = self._parse_INCAR_generator_parameters(
+                            ptype, val
+                        )
+                    else:
+                        params[name] = self._parse_INCAR_generator_vector_parameters(
+                            ptype, val, self.filename, name
+                        )
+                except Exception as exc:
+                    if name == "RANDOM_SEED":
+                        # Handles the case where RANDOM SEED > 99999, which results in *****
+                        params[name] = None
+                    else:
+                        raise exc
+        elem.clear()
+        return params
+
     @staticmethod
     def parse_item_to_dict(node, d):
         """
-        Parses values from an item to a dictionary
+        Parses an XML element with the tag 'i' into a dictionary. The method handles different
+        data types specified in the 'type' attribute of the element (e.g., string, float, int, logical).
 
         Args:
-            node (etree.Element instance): Node to be parsed
-            d (dict): The dictionary to which data is to be parsed
+            node (xml.etree.Element): An XML element with the tag 'i', containing data to be parsed.
 
         Returns:
-            d (dictionary)
+            dict: A dictionary with a single key-value pair. The key is the 'name' attribute of the element,
+                and the value is the parsed data, converted to the appropriate Python data type.
         """
         type_dict = {"string": str, "float": float, "int": int, "logical": bool}
         logical_dict = {"T": True, "F": False}
@@ -561,6 +655,27 @@ class Vasprun(object):
         except (KeyError, IndexError, ValueError):
             d[node.attrib["name"]] = node.text
         return d
+
+    def _parse_from_incar(self, param_name, val_type, val):
+        """
+        Placeholder method for reading and parsing parameter values from an INCAR file. This method is intended
+        to be used for handling special cases where values in the VASP XML file are not correctly formatted.
+
+        Args:
+            filename (str): The path to the INCAR file.
+            param_name (str): The name of the parameter to be read.
+            val_type (str): The expected data type of the parameter ('string', 'float', 'int', 'logical').
+            val (str): The original value from the XML file that needs special handling.
+
+        Returns:
+            The correct value read from the INCAR file, or None if the value cannot be determined. The return
+            type should match the expected `val_type`.
+        """
+        pass
+        # Placeholder for special handling logic
+        # Adapt this method based on specific handling logic for irregular values
+        # For example, read from an INCAR file or set to a default value
+        return None
 
     def parse_parameters(self, node, d):
         """

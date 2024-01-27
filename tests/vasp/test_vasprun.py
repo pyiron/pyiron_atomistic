@@ -48,6 +48,89 @@ class TestVasprun(unittest.TestCase):
                 self.assertIsNone(vp.get_potentiostat_output())
 
     def test_parse_generator(self):
+        vasprun_data = {
+                        'vasprun_1.xml': {
+                            'program': 'vasp',
+                            'version': '4.6.28',
+                            'subversion': '25Jul05 complex  parallel',
+                            'platform': 'LinuxIFC',
+                            'date': '2016 04 10',
+                            'time': '17:29:20'
+                        },
+                        'vasprun_2.xml': {
+                            'program': 'vasp',
+                            'version': '5.3.5',
+                            'subversion': '31Mar14 (build Apr 17 2014 15:55:21) complex                          parallel',
+                            'platform': 'LinuxIFC',
+                            'date': '2016 06 22',
+                            'time': '20:08:33'
+                        },
+                        'vasprun_3.xml': {
+                            'program': 'vasp',
+                            'version': '5.3.5',
+                            'subversion': '31Mar14 (build Dec 16 2016 13:46:59) complex                          parallel',
+                            'platform': 'LinuxIFC',
+                            'date': '2017 04 25',
+                            'time': '19:09:22'
+                        },
+                        'vasprun_4.xml': {
+                            'program': 'vasp',
+                            'version': '5.3.5',
+                            'subversion': '31Mar14 (build Dec 16 2016 13:46:59) complex                          parallel',
+                            'platform': 'LinuxIFC',
+                            'date': '2017 04 25',
+                            'time': '19:47:01'
+                        },
+                        'vasprun_5.xml': {
+                            'program': 'vasp',
+                            'version': '5.3.5',
+                            'subversion': '31Mar14 (build Dec 16 2016 13:46:59) complex                          parallel',
+                            'platform': 'LinuxIFC',
+                            'date': '2017 04 26',
+                            'time': '12:55:54'
+                        },
+                        'vasprun_6.xml': {
+                            'program': 'vasp',
+                            'version': '5.4.1',
+                            'subversion': '24Jun15 (build Dec 18 2016 09:48:16) gamma-only                       parallel',
+                            'platform': 'IFC91_ompi',
+                            'date': '2017 11 21',
+                            'time': '15:01:21'
+                        },
+                        'vasprun_7.xml': {
+                            'program': 'vasp',
+                            'version': '5.4.4.18Apr17-6-g9f103f2a35',
+                            'subversion': '(build Oct 10 2019 11:41:53) complex            parallel',
+                            'platform': 'LinuxIFC',
+                            'date': '2019 12 02',
+                            'time': '06:30:52'
+                        },
+                        'vasprun_8.xml': {
+                            'program': 'vasp',
+                            'version': '5.4.4.18Apr17-6-g9f103f2a35',
+                            'subversion': '(build Oct 10 2019 11:41:53) complex            parallel',
+                            'platform': 'LinuxIFC',
+                            'date': '2019 12 02',
+                            'time': '06:30:52'
+                        },
+                        'vasprun_9.xml': {
+                            'program': 'vasp',
+                            'version': '5.4.4.18Apr17-6-g9f103f2a35',
+                            'subversion': '(build Mar 04 2021 11:38:41) gamma-only         parallel',
+                            'platform': 'LinuxIFC',
+                            'date': '2021 03 04',
+                            'time': '11:39:31'
+                        },
+                        'vasprun_line.xml': {
+                            'program': 'vasp',
+                            'version': '5.4.1',
+                            'subversion': '24Jun15 (build Dec 18 2016 09:36:42) complex                          parallel',
+                            'platform': 'IFC91_ompi',
+                            'date': '2019 03 19',
+                            'time': '16:54:22'
+                        }
+                    }
+
         for vp in self.vp_list:
             self.assertIsInstance(vp.vasprun_dict["generator"], dict)
             self.assertTrue("program" in vp.vasprun_dict["generator"].keys())
@@ -56,10 +139,29 @@ class TestVasprun(unittest.TestCase):
             self.assertTrue("subversion" in vp.vasprun_dict["generator"].keys())
             self.assertTrue("platform" in vp.vasprun_dict["generator"].keys())
             self.assertTrue("date" in vp.vasprun_dict["generator"].keys())
+            self.assertEqual(vp.vasprun_dict["generator"], vasprun_data[os.path.basename(vp.filename)])
+
 
     def test_parse_incar(self):
-        for vp in self.vp_list:
-            self.assertIsInstance(vp.vasprun_dict["incar"], dict)
+        expected_incar_outputs = {
+            'vasprun_1.xml': {'SYSTEM': 'passivated_AlN_vacuum_118.0', 'ISTART': 0, 'PREC': 'accurate', 'ALGO': 'Fast', 'ICHARG': 2, 'NELM': 40, 'NELMDL': -5, 'NELMIN': 8, 'EDIFF': 1e-05, 'EDIFFG': 0.001, 'IBRION': 1, 'NSW': 10, 'ISIF': 2, 'ENCUT': 500.0, 'LREAL': False, 'ISMEAR': 2, 'SIGMA': 0.1, 'LWAVE': False, 'LCHARG': False, 'LVTOT': False, 'REF_TYPE': 'none'},
+            'vasprun_2.xml': {'SYSTEM': 'ToDo', 'ISTART': 0, 'PREC': 'accurate', 'ALGO': 'Fast', 'NELM': 300, 'IBRION': -1, 'ENCUT': 400.0, 'LREAL': False, 'SIGMA': 0.1, 'LCHARG': True, 'LVTOT': True, 'LORBIT': False, 'LDIPOL': True, 'IDIPOL': 3, 'DIP%EFIELD': -0.01},
+            'vasprun_3.xml': {'SYSTEM': 'ToDo', 'PREC': 'accurate', 'ALGO': 'Fast', 'NELM': 60, 'IBRION': -1, 'ENCUT': 250.0, 'LREAL': False, 'LWAVE': False, 'LORBIT': False},
+            'vasprun_4.xml': {'SYSTEM': 'ToDo', 'PREC': 'accurate', 'ALGO': 'Fast', 'NELM': 60, 'IBRION': -1, 'ENCUT': 250.0, 'LREAL': False, 'LWAVE': False, 'LORBIT': False},
+            'vasprun_5.xml': {'SYSTEM': 'ToDo', 'PREC': 'accurate', 'ALGO': 'Fast', 'NELM': 60, 'IBRION': -1, 'ENCUT': 250.0, 'LREAL': False, 'LWAVE': False, 'LORBIT': False},
+            'vasprun_6.xml': {'SYSTEM': 'ToDo', 'ISTART': 1, 'PREC': 'accurate', 'ALGO': 'Fast', 'NELM': 200, 'IBRION': -1, 'EDIFF': 1e-06, 'ISYM': 0, 'ENCUT': 500.0, 'LREAL': 'Auto', 'ISMEAR': -1, 'SIGMA': 0.1, 'LWAVE': True, 'LCHARG': True, 'LVTOT': True, 'LVHAR': True, 'LORBIT': False, 'KPOINT_BSE': [-1, 0, 0, 0], 'LDIPOL': True, 'IDIPOL': 3, 'DIPOL': [0.0, 0.0, 0.31870518]},
+            'vasprun_7.xml': {'SYSTEM': 'pseudo_H', 'PREC': 'accurate', 'ALGO': 'Fast', 'NELM': 400, 'IBRION': -1, 'LREAL': False, 'LWAVE': False, 'LORBIT': 0, 'KPOINT_BSE': [-1, 0, 0, 0]},
+            'vasprun_8.xml': {'SYSTEM': 'pseudo_H', 'PREC': 'accurate', 'ALGO': 'Fast', 'NELM': 400, 'IBRION': -1, 'LREAL': False, 'LWAVE': False, 'LORBIT': 0, 'KPOINT_BSE': [-1, 0, 0, 0]},
+            'vasprun_9.xml': {'SYSTEM': 'Ge.water', 'PREC': 'normal', 'ALGO': 'FAST', 'NELM': 100, 'IBRION': 0, 'EDIFF': 1e-05, 'EDIFFG': -0.01, 'NSW': 2, 'IWAVPR': 10, 'ISYM': 0, 'ENCUT': 400.0, 'POTIM': 0.5, 'TEBEG': 400.0, 'SMASS': -3.0, 'LREAL': 'A', 'ISMEAR': 0, 'SIGMA': 0.05, 'LWAVE': False, 'LCHARG': False, 'LVTOT': True, 'LVHAR': True, 'MDALGO': 5, 'CSVRTAU': 400.0, 'ICCE': 4, 'CCETYP': 3, 'POTTAU': 100.0, 'UBEG': 0.0, 'POTCAP': 0.03339719, 'ILOC': 3, 'KPOINT_BSE': [-1, 0, 0, 0], 'LDIPOL': True, 'IDIPOL': 3, 'DIPOL': [0.0, 0.0, 0.337978]},
+            'vasprun_line.xml': {'SYSTEM': 'Test2', 'ISTART': 0, 'PREC': 'high', 'ALGO': 'FAST', 'ICHARG': 11, 'NELM': 400, 'EDIFF': 1e-07, 'ENCUT': 450.0, 'LREAL': False, 'ISMEAR': 1, 'SIGMA': 0.1, 'LWAVE': False, 'LCHARG': True, 'LORBIT': False, 'KPOINT_BSE': [-1, 0, 0, 0]}
+        }
+
+        for _, vp in enumerate(self.vp_list):
+            filename = os.path.basename(vp.filename)  # Extract filename
+            self.assertIn(filename, expected_incar_outputs)  # Ensure expected output is defined for this file
+            expected_incar = expected_incar_outputs[filename]
+            actual_incar = vp.vasprun_dict["incar"]
+            self.assertEqual(actual_incar, expected_incar)
 
     def test_parse_kpoints(self):
         for vp in self.vp_list:
