@@ -19,6 +19,7 @@ import numpy as np
 from pyiron_atomistics.atomistics.master.parallel import AtomisticParallelMaster
 from pyiron_atomistics.atomistics.structure.atoms import Atoms, ase_to_pyiron
 from pyiron_base import JobGenerator
+from pyiron_base.jobs.job.util import _get_safe_job_name
 
 __author__ = "Joerg Neugebauer, Jan Janssen"
 __copyright__ = (
@@ -79,6 +80,16 @@ class MurnaghanDebyeModel(DebyeModel):
 
 
 class MurnaghanJobGenerator(JobGenerator):
+    def _get_strains(self):
+        strains = self._master.input.get("strains")
+        if strains is None:
+            strains = np.linspace(
+                -self._master.input["vol_range"],
+                self._master.input["vol_range"],
+                int(self._master.input["num_points"]),
+            )
+        return strains
+
     @property
     def parameter_list(self):
         """
@@ -87,14 +98,7 @@ class MurnaghanJobGenerator(JobGenerator):
             (list)
         """
         parameter_lst = []
-        strains = self._master.input.get("strains")
-        if strains is None:
-            strains = np.linspace(
-                -self._master.input["vol_range"],
-                self._master.input["vol_range"],
-                int(self._master.input["num_points"]),
-            )
-        for strain in strains:
+        for strain in self._get_strains():
             basis = _strain_axes(
                 structure=self._master.structure,
                 axes=self._master.input["axes"],
@@ -104,7 +108,15 @@ class MurnaghanJobGenerator(JobGenerator):
         return parameter_lst
 
     def job_name(self, parameter):
-        return "{}_{}".format(self._master.job_name, parameter[0]).replace(".", "_")
+        # writing the strain to float precision can blow up the job name of the
+        # children; so figure out how much we really need here
+        # find the smallest change in strain
+        delta = np.min(np.abs(np.diff(self._get_strains())))
+        # we need at most log(delta) decimal places to give unique children
+        # names; if delta >= 1, rounding to 0 is sufficient
+        ndigits = max(-int(np.floor(np.log10(delta))), 0)
+        return _get_safe_job_name((self._master.job_name, parameter[0]),
+                                  ndigits=ndigits)
 
     def modify_job(self, job, parameter):
         job.structure = parameter[1]
