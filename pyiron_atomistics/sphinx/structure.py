@@ -2,26 +2,86 @@
 # Copyright (c) Max-Planck-Institut für Eisenforschung GmbH - Computational Materials Design (CM) Department
 # Distributed under the terms of "New BSD License", see the LICENSE file.
 
-from collections import OrderedDict
+import re
 import numpy as np
 import scipy.constants
+from pyiron_atomistics.atomistics.structure.parser_base import KeywordTreeParser
 from pyiron_atomistics.atomistics.structure.atoms import Atoms
 from pyiron_atomistics.atomistics.structure.periodic_table import PeriodicTable
 
-__author__ = "Sudarsan Surendralal, Jan Janssen"
+__author__ = "Christoph Freysoldt"
 __copyright__ = (
-    "Copyright 2021, Max-Planck-Institut für Eisenforschung GmbH - "
+    "Copyright 2023, Max-Planck-Institut für Eisenforschung GmbH - "
     "Computational Materials Design (CM) Department"
 )
-__version__ = "1.0"
-__maintainer__ = "Sudarsan Surendralal"
-__email__ = "surendralal@mpie.de"
+__version__ = "2.0"
+__maintainer__ = "Christoph Freysoldt"
+__email__ = "freysoldt@mpie.de"
 __status__ = "production"
-__date__ = "Feb 4, 2018"
+__date__ = "Dec 8, 2023"
 
 BOHR_TO_ANGSTROM = (
     scipy.constants.physical_constants["Bohr radius"][0] / scipy.constants.angstrom
 )
+
+
+class StructParser(KeywordTreeParser):
+    """
+    This class reads one or more structures in sx format.
+    """
+
+    def __init__(self, file):
+        super().__init__({"structure": self.parse_structure})
+        self.configs = []
+        self.parse(file)
+
+    def parse_structure(self):
+        """Parses structure{} blocks"""
+        self.keylevels.append({"cell": self.parse_cell, "species": self.parse_species})
+        self.extract_via_regex("structure")
+        # --- initialize for next structure
+        self.cell = None
+        self.positions = []
+        self.species = []
+        self.indices = []
+        self.ispecies = -1
+        # continue parsing
+        yield
+        # create Atoms object and append it to configs
+        pse = PeriodicTable()
+        atoms = Atoms(
+            species=[pse.element(s) for s in self.species],
+            indices=self.indices,
+            cell=self.cell * BOHR_TO_ANGSTROM,
+            positions=np.array(self.positions) * BOHR_TO_ANGSTROM,
+            pbc=True,
+        )
+        self.configs.append(atoms)
+
+    def parse_cell(self):
+        """Read the cell"""
+        txt = self.extract_var("cell")
+        self.cell = self.get_vector("cell", txt).reshape(3, 3)
+
+    def parse_species(self):
+        """Parses species{} blocks"""
+        self.extract_via_regex("species")
+        self.keylevels.append({"element": self.get_element, "atom": self.read_atom})
+        self.ispecies += 1
+
+    def get_element(self):
+        """Read element"""
+        txt = self.extract_var("element")
+        self.species.append(re.sub('.*"([^"]*)".*', r"\1", txt))
+
+    def read_atom(self):
+        """Read atomic coordinates from an atom block"""
+        txt = self.extract_var("atom", "{}")
+        self.positions.append(self.get_vector("coords", txt))
+        self.indices.append(self.ispecies)
+        if "label" in txt:
+            label = re.sub(r'.*label\s*=\s*"([^"]+)"\s*;.*', r"\1", txt)
+            print(f"atom {len(self.positions)} label={label}")
 
 
 def read_atoms(filename="structure.sx"):
@@ -30,72 +90,8 @@ def read_atoms(filename="structure.sx"):
         filename (str): Filename of the sphinx structure file
 
     Returns:
-        pyiron_atomistics.objects.structure.atoms.Atoms instance
+        pyiron_atomistics.objects.structure.atoms.Atoms instance (or a list of them)
 
     """
-    file_string = []
-    with open(filename) as f:
-        for line in f:
-            line = line.strip()
-            file_string.append(line)
-    cell_trigger = "cell"
-    cell_string = list()
-    species_list = list()
-    species_trigger = "element"
-    positions_dict = OrderedDict()
-    positions = list()
-    pse = PeriodicTable()
-    for i, line in enumerate(file_string):
-        if cell_trigger in line:
-            for j in range(len(file_string)):
-                line_str = file_string[i + j]
-                cell_string.append(line_str)
-                if ";" in line_str:
-                    break
-        if species_trigger in line:
-            species = (
-                line.strip().split("=")[-1].replace(";", "").replace('"', "").strip()
-            )
-            species_list.append(pse.element(species))
-            positions_dict[species] = 0
-            for j in range(len(file_string) - i):
-                line_str = file_string[i + j]
-                k = 0
-                if "atom" in line_str:
-                    break_loop = False
-                    while not break_loop:
-                        position_string = " ".join(
-                            file_string[i + j + k].split("=")[-1]
-                        )
-                        replace_list = ["[", "]", ";", "}", "movable", "X", "Y", "Z"]
-                        for rep in replace_list:
-                            position_string = (
-                                "".join(position_string).replace(rep, " ").split()
-                            )
-                        positions.append(
-                            np.array(position_string[0].split(","), dtype=float)
-                        )
-                        positions_dict[species] += 1
-                        k += 1
-                        if (i + j + k) <= len(file_string) - 1:
-                            if (
-                                "element" in file_string[i + j + k]
-                                or "atom" not in file_string[i + j + k]
-                            ):
-                                break_loop = True
-                    break
-    indices = list()
-    for i, val in enumerate(positions_dict.values()):
-        indices.append(np.ones(val, dtype=int) * i)
-    indices = np.hstack(indices)
-    replace_list = ["cell", "=", "[", "]", ",", ";"]
-    for rep in replace_list:
-        cell_string = " ".join(cell_string).replace(rep, " ").split()
-    cell = np.array(cell_string, dtype=float).reshape((3, 3)) * BOHR_TO_ANGSTROM
-    atoms = Atoms(
-        species=species_list,
-        indices=indices,
-        cell=cell,
-        positions=np.array(positions) * BOHR_TO_ANGSTROM,
-    )
-    return atoms
+    configs = StructParser(filename).configs
+    return configs[0] if len(configs) == 1 else configs
