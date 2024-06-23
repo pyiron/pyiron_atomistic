@@ -109,7 +109,7 @@ def get_convergence_check(job):
 
 
 def get_number_of_species(job):
-    return {"Number_of_species": len(job["output/structure/species"])}
+    return {"Number_of_species": len(job["input/structure/species"])}
 
 
 def get_number_of_ionic_steps(job):
