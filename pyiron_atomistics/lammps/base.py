@@ -1055,24 +1055,6 @@ class Input:
             for k, v in self.potential.to_dict().items()
         }
 
-    def to_hdf(self, hdf5):
-        """
-        Args:
-            hdf5:
-        Returns:
-        """
-        with hdf5.open("input") as hdf5_input:
-            hdf5_input.write_dict_to_hdf(data_dict=self.to_dict())
-
-    def from_hdf(self, hdf5):
-        """
-        Args:
-            hdf5:
-        Returns:
-        """
-        with hdf5.open("input") as hdf_input:
-            self.from_dict(obj_dict=hdf_input.read_dict_from_hdf(recursive=True))
-
 
 def resolve_hierachical_dict(data_dict, group_name=""):
     return_dict = {}
