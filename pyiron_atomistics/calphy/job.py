@@ -998,17 +998,15 @@ class Calphy(GenericJob, HasStructure):
 
         return db_dict
 
-    def to_hdf(self, hdf=None, group_name=None):
-        super().to_hdf(hdf=hdf, group_name=group_name)
-        self.input.to_hdf(self.project_hdf5)
-        self._output.to_hdf(self.project_hdf5)
+    def to_dict(self):
+        obj_dict = super().to_dict()
+        obj_dict["input"]["inputdata"] = self.input.to_dict()
+        obj_dict["output"] = self._output.to_dict()
 
-    def from_hdf(self, hdf=None, group_name=None):
-        super().from_hdf(hdf=hdf, group_name=group_name)
-        self.input.from_hdf(self.project_hdf5)
-        self._output.from_hdf(self.project_hdf5)
-        self._potential_from_hdf()
-        # self.create_calc()
+    def from_dict(self, obj_dict):
+        self.input.from_dict(obj_dict=obj_dict["input"]["inputdata"])
+        if "output" in obj_dict.keys():
+            self._output.from_dict(obj_dict=obj_dict["output"])
 
     @property
     def publication(self):
