@@ -261,6 +261,16 @@ class LammpsPotentialFile(PotentialAbstract):
             default_df=default_df,
             selected_atoms=selected_atoms,
         )
+        if len(self.list()) == 0:
+            state.logger.warning(
+                "It looks like your potential database is empty. In order to"
+                " install the standard pyiron library, run:\n\n"
+                "conda install -c conda-forge pyiron-data\n\n"
+                "Depending on the circumstances, you might have to change the"
+                " RESOURCE_PATHS of your .pyiron file. It is typically located in"
+                " your home directory. More can be found on the installation page"
+                " of the pyiron website."
+            )
 
     def default(self):
         if self._default_df is not None:
