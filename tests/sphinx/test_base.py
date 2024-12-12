@@ -665,7 +665,7 @@ class TestSphinx(unittest.TestCase):
         )
         self.assertEqual(
             eig_lst,
-            self.sphinx_2_3.output.generic.dft["bands_eigen_values"].tolist(),
+            self.sphinx_2_3.output.generic.dft["bands_eigen_values"].tolist()[0],
         )
         self.assertEqual(
             energy_free_lst,
