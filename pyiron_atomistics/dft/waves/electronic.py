@@ -4,7 +4,17 @@
 
 from __future__ import print_function
 
+import dataclasses
+from typing import Iterable
+
 import numpy as np
+import numpy.typing as npt
+import pandas as pd
+import scipy.optimize as so
+from scipy.constants import Boltzmann, eV
+
+kB = Boltzmann / eV
+import scipy.special
 
 from pyiron_atomistics.atomistics.structure.atoms import (
     Atoms,
@@ -748,6 +758,12 @@ class ElectronicStructure(object):
     def __repr__(self):
         return self.__str__()
 
+    @property
+    def fermi(self):
+        """Resmear the single particle energies with a Fermi distribution for
+        different temperatures."""
+        return FermiSmearing.from_electronic_structure(self)
+
 
 class Kpoint(object):
     """
@@ -852,6 +868,173 @@ class Band(object):
     @resolved_dos_matrix.setter
     def resolved_dos_matrix(self, val):
         self._resolved_dos_matrix = val
+
+
+@dataclasses.dataclass(frozen=True)
+class FermiSmearing:
+    """
+    Resmears a fixed set of single particle energies to obtain electronic free
+    energies.
+
+    See [1] for an introduction to the theory.
+
+    `eigenvalues` and `weights` must be in the following shape (spin channels, kpoints, bands).
+
+    [1]: https://journals.aps.org/prb/abstract/10.1103/PhysRevB.95.165126
+
+    Attributes:
+        eigenvalues (numpy.array of floats): the energy eigenvalues from a DFT calculations
+        weights     (numpy.array of floats): the k point weights from a DFT calculations
+        n_electrons (int): the number of electrons in the underlying structure
+    """
+
+    eigenvalues: npt.NDArray[float]  # shape of (#spin channels, #kpoints, #bands)
+    weights: npt.NDArray[float]  # shape of (#spin channels, #kpoints, #bands)
+    n_electrons: int
+
+    def __post_init__(self):
+        self.eigenvalues.setflags(write=False)
+        self.weights.setflags(write=False)
+
+    @classmethod
+    def from_vasp(cls, job: "Vasp") -> "Self":
+        if not job.status.finished:
+            raise ValueError(f"Can only instantiate {cls.__name__} from finished jobs!")
+        eigenvals = job.content["output/generic/dft/bands/eig_matrix"]
+        # bring the weights in the same shape as eig values
+        weights = job.content["output/electronic_structure/k_weights"].reshape(1, -1, 1)
+        # adjust for (non-) spin polarized
+        weights *= 3 - eigenvals.shape[0]
+        return cls(eigenvals, weights, job.get_nelect())
+
+    @classmethod
+    def from_sphinx(cls, job: "Sphinx") -> "Self":
+        if not job.status.finished:
+            raise ValueError(f"Can only instantiate {cls.__name__} from finished jobs!")
+        eigenvals = job.content["output/electronic_structure/eig_matrix"]
+        weights = job.content["output/electronic_structure/k_weights"].reshape(1, -1, 1)
+        weights *= 3 - eigenvals.shape[0]
+        occ = job.content["output/electronic_structure/occ_matrix"]
+        n_elect = int((weights * occ).sum())
+        return cls(eigenvals, weights, n_elect)
+
+    @classmethod
+    def from_electronic_structure(
+        cls, electronic_structure: ElectronicStructure
+    ) -> "Self":
+        eigenvals = electronic_structure.eigenvalue_matrix.copy()
+        weights = electronic_structure.kpoint_weights.copy().reshape(1, -1, 1)
+        weights *= 3 - eigenvals.shape[0]
+        n_elect = int((weights * electronic_structure.occupancy_matrix).sum())
+        return cls(eigenvals, weights, n_elect)
+
+    @staticmethod
+    def _efermi(e, T, mu):
+        if T != 0:
+            # avoid overflow warnings by restricting range of exponent, 1/1+e-/+100 is 0/1 anyway.
+            exponent = np.clip((e - mu) / kB / T, -100, 100)
+            return 1 / (1 + np.exp(exponent))
+        else:
+            return 1 * (e <= mu)
+
+    def occupation(self, T: float, mu: float) -> float:
+        """
+        Calculate the number of electrons in the system.
+
+        Args:
+            T (float): temperature
+            mu (float): chemical potential of electrons
+
+        Returns:
+            float: number of electrons, can be fractional!
+        """
+        return (self._efermi(self.eigenvalues, T, mu) * self.weights).sum()
+
+    def find_fermi_level(self, T: float) -> float:
+        """
+        Find the chemical potential that fills the system with the correct number of electrons.
+
+        Args:
+            T (float): temperature
+
+        Returns:
+            float: chemical potential or fermi level
+        """
+        ret = so.root_scalar(
+            lambda mu: self.occupation(T, mu) - self.n_electrons,
+            bracket=(self.eigenvalues.min(), self.eigenvalues.max()),
+            xtol=1e-5,
+        )
+        ef = ret.root
+        occ = self.occupation(T, ef)
+        if not ret.converged or (ret.converged and abs(occ - self.n_electrons) > 0.01):
+            logger.warning(
+                f"Failed to find fermi level at {T}K! Got {self.occupation(T, ef)} electrons "
+                f"instead of {self.n_electrons}!"
+            )
+        return ef
+
+    def density_at_fermi_level(
+        self, T: float | Iterable[float]
+    ) -> float | npt.NDArray[float]:
+        """
+        Calculate the electronic density at the fermi level.
+        """
+        if isinstance(T, Iterable):
+            return np.array([self.density_at_fermi_level_fermi(Ti, smear) for Ti in T])
+        ef = self.find_fermi_level(T)
+        smear = kB * T
+        # avoid overflow warnings by restricting range of exponent, 1/1+cosh-/+100 is 0 anyway.
+        ediff = np.clip((self.eigenvalues - ef) / smear, -100, 100)
+        # 1/cosh+1 is the "delta" function corresponding to Fermi smearing, see:
+        # https://doi.org/10.1103/PhysRevB.107.195122
+        return 1 / smear * (self.weights * (1 / 2 * 1 / (np.cosh(ediff) + 1))).sum()
+
+    def energy_entropy(
+        self, T: float | Iterable[float]
+    ) -> dict[str, float] | pd.DataFrame:
+        """
+        Calculate the electronic free energy properties.
+
+        Returns a dictionary with the keys:
+            F: electronic free energy per structure
+            U: electronic internal energy per structure
+            S: electronic entropy per structure
+            f, u, s: corresponding per atomic quantities
+            N: number of atoms
+            T: temperature
+            mu: fermi level
+
+        If `T` is an iterable, call this method for every individual temperature
+        and wrap it in a data frame with the corresponding columns.
+
+        Args:
+            T (float, iterable of float): temperature or list of them
+
+        Returns:
+            dict: electronic properties at given temperature
+            DataFrame: electronic properties at given temperatures
+        """
+        if isinstance(T, Iterable):
+            return pd.DataFrame([self.energy_entropy(Ti) for Ti in T])
+        ef = self.find_fermi_level(T)
+        f = self._efermi(self.eigenvalues, T, ef)
+        U = (
+            ((f - (self.eigenvalues <= ef) * 1) * (self.eigenvalues - ef))
+            * self.weights
+        ).sum()
+        S = (
+            kB
+            * (self.weights * (scipy.special.entr(f) + scipy.special.entr(1 - f))).sum()
+        )
+        F = U - T * S
+        return {
+            "F": F,
+            "U": U,
+            "S": S,
+            "T": T,
+            "mu": ef,
+        }
 
 
 def electronic_structure_dict_to_hdf(data_dict, hdf, group_name):
