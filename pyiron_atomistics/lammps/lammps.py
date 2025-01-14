@@ -103,13 +103,12 @@ def lammps_function(
           "static": No parameters
           "md": "temperature", "pressure", "n_ionic_steps", "time_step", "n_print", "temperature_damping_timescale",
                 "pressure_damping_timescale", "seed", "tloop", "initial_temperature", "langevin", "delta_temp",
-                "delta_press", job_name", "rotation_matrix"
+                "delta_press"
           "minimize": "ionic_energy_tolerance", "ionic_force_tolerance", "max_iter", "pressure", "n_print", "style",
-                      "rotation_matrix"
           "vcsgc": "mu", "ordered_element_list", "target_concentration", "kappa", "mc_step_interval", "swap_fraction",
                    "temperature_mc", "window_size", "window_moves", "temperature", "pressure", "n_ionic_steps",
                    "time_step", "n_print", "temperature_damping_timescale", "pressure_damping_timescale", "seed",
-                   "initial_temperature", "langevin", "job_name", "rotation_matrix"
+                   "initial_temperature", "langevin"
         cutoff_radius (float): cut-off radius for the interatomic potential
         units (str): Units for LAMMPS
         bonds_kwargs (dict): key-word arguments to create atomistic bonds:
